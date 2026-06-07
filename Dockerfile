@@ -23,7 +23,7 @@ COPY backend/requirements.txt .
 
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY backend/ .
+COPY backend/ ./backend
 
 # Copy built frontend to backend's static files location (if needed)
 COPY --from=frontend-build /app/frontend/dist ./static
@@ -31,3 +31,4 @@ COPY --from=frontend-build /app/frontend/dist ./static
 EXPOSE 8000
 
 CMD ["python", "-m", "uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "8000"]
+
