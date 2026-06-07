@@ -6,7 +6,6 @@ from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from .config import settings
@@ -82,20 +81,11 @@ app.include_router(auth_router, prefix="/api/v1")
 app.include_router(tasks_router, prefix="/api/v1/tasks")
 
 
-@app.get("/")
-def root() -> FileResponse:
-    """Serve the frontend index.html."""
-    index_file = Path(__file__).parent.parent / "static" / "index.html"
-    if index_file.exists():
-        return FileResponse(index_file)
-    return {"message": "Todo API", "docs": "/docs"}
-
-
-# Mount static files (built frontend) - serve everything from /static
+# Mount static files (built frontend) - MUST be last
 static_dir = Path(__file__).parent.parent / "static"
 if static_dir.exists():
-    app.mount("/assets", StaticFiles(directory=str(static_dir / "assets")), name="assets")
     app.mount("/", StaticFiles(directory=str(static_dir), html=True), name="static")
+    logger.info("Mounted static files from %s", static_dir)
 else:
     logger.warning("Static directory not found at %s", static_dir)
 
