@@ -6,6 +6,7 @@ from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from .config import settings
@@ -80,14 +81,33 @@ app.include_router(health_router, prefix="/api/v1")
 app.include_router(auth_router, prefix="/api/v1")
 app.include_router(tasks_router, prefix="/api/v1/tasks")
 
-
-# Mount static files (built frontend) - MUST be last
+# Mount static files for assets
 static_dir = Path(__file__).parent.parent / "static"
 if static_dir.exists():
-    app.mount("/", StaticFiles(directory=str(static_dir), html=True), name="static")
-    logger.info("Mounted static files from %s", static_dir)
-else:
-    logger.warning("Static directory not found at %s", static_dir)
+    app.mount("/assets", StaticFiles(directory=str(static_dir / "assets")), name="assets")
+    logger.info("Mounted /assets from %s", static_dir / "assets")
+
+
+@app.get("/{full_path:path}")
+async def serve_spa(full_path: str):
+    """Serve SPA - return index.html for all non-API routes."""
+    # Skip API routes
+    if full_path.startswith("api/"):
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail="Not found")
+    
+    # Serve static files
+    static_file = static_dir / full_path
+    if static_file.exists() and static_file.is_file():
+        return FileResponse(static_file)
+    
+    # Fallback to index.html for SPA routing
+    index_file = static_dir / "index.html"
+    if index_file.exists():
+        return FileResponse(index_file)
+    
+    from fastapi import HTTPException
+    raise HTTPException(status_code=404, detail="Not found")
 
 
 if __name__ == "__main__":
