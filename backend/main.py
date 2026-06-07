@@ -81,11 +81,6 @@ app.include_router(health_router, prefix="/api/v1")
 app.include_router(auth_router, prefix="/api/v1")
 app.include_router(tasks_router, prefix="/api/v1/tasks")
 
-# Mount static files (built frontend)
-static_dir = Path(__file__).parent.parent / "static"
-if static_dir.exists():
-    app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
-
 
 @app.get("/")
 def root() -> FileResponse:
@@ -96,17 +91,13 @@ def root() -> FileResponse:
     return {"message": "Todo API", "docs": "/docs"}
 
 
-@app.get("/{full_path:path}")
-async def serve_spa(full_path: str) -> FileResponse:
-    """Serve index.html for all non-API routes (SPA fallback)."""
-    # Don't serve SPA for API routes
-    if full_path.startswith("api/") or full_path.startswith("docs") or full_path.startswith("openapi"):
-        raise FileNotFoundError()
-    
-    index_file = Path(__file__).parent.parent / "static" / "index.html"
-    if index_file.exists():
-        return FileResponse(index_file)
-    raise FileNotFoundError()
+# Mount static files (built frontend) - serve everything from /static
+static_dir = Path(__file__).parent.parent / "static"
+if static_dir.exists():
+    app.mount("/assets", StaticFiles(directory=str(static_dir / "assets")), name="assets")
+    app.mount("/", StaticFiles(directory=str(static_dir), html=True), name="static")
+else:
+    logger.warning("Static directory not found at %s", static_dir)
 
 
 if __name__ == "__main__":
