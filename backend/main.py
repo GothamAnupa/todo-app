@@ -6,6 +6,7 @@ from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from .config import settings
@@ -80,23 +81,32 @@ app.include_router(health_router, prefix="/api/v1")
 app.include_router(auth_router, prefix="/api/v1")
 app.include_router(tasks_router, prefix="/api/v1/tasks")
 
-
-@app.get("/")
-def root() -> dict[str, str]:
-    """Lightweight root redirect hint for developers."""
-    return {
-        "message": "Todo API",
-        "docs": "/docs",
-        "health": "/api/v1/health",
-        "tasks": "/api/v1/tasks",
-        "auth": "/api/v1/auth",
-    }
-
-
 # Mount static files (built frontend)
 static_dir = Path(__file__).parent.parent / "static"
 if static_dir.exists():
-    app.mount("/", StaticFiles(directory=str(static_dir), html=True), name="static")
+    app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
+
+
+@app.get("/")
+def root() -> FileResponse:
+    """Serve the frontend index.html."""
+    index_file = Path(__file__).parent.parent / "static" / "index.html"
+    if index_file.exists():
+        return FileResponse(index_file)
+    return {"message": "Todo API", "docs": "/docs"}
+
+
+@app.get("/{full_path:path}")
+async def serve_spa(full_path: str) -> FileResponse:
+    """Serve index.html for all non-API routes (SPA fallback)."""
+    # Don't serve SPA for API routes
+    if full_path.startswith("api/") or full_path.startswith("docs") or full_path.startswith("openapi"):
+        raise FileNotFoundError()
+    
+    index_file = Path(__file__).parent.parent / "static" / "index.html"
+    if index_file.exists():
+        return FileResponse(index_file)
+    raise FileNotFoundError()
 
 
 if __name__ == "__main__":
