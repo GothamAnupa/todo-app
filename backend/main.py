@@ -4,7 +4,7 @@ import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -20,6 +20,10 @@ from .utils.scheduler import shutdown_scheduler, start_scheduler
 from .utils.security import hash_password
 
 logger = logging.getLogger(__name__)
+
+# Get static directory path - relative to this file's parent's parent (the app root)
+STATIC_DIR = Path(__file__).parent.parent / "static"
+logger.info(f"Static directory configured at: {STATIC_DIR}")
 
 
 def seed_default_user() -> None:
@@ -82,31 +86,41 @@ app.include_router(auth_router, prefix="/api/v1")
 app.include_router(tasks_router, prefix="/api/v1/tasks")
 
 # Mount static files for assets
-static_dir = Path(__file__).parent.parent / "static"
-if static_dir.exists():
-    app.mount("/assets", StaticFiles(directory=str(static_dir / "assets")), name="assets")
-    logger.info("Mounted /assets from %s", static_dir / "assets")
+if STATIC_DIR.exists():
+    assets_dir = STATIC_DIR / "assets"
+    if assets_dir.exists():
+        app.mount("/assets", StaticFiles(directory=str(assets_dir)), name="assets")
+        logger.info("Mounted /assets from %s", assets_dir)
+else:
+    logger.warning("Static directory not found at %s", STATIC_DIR)
 
 
 @app.get("/{full_path:path}")
 async def serve_spa(full_path: str):
     """Serve SPA - return index.html for all non-API routes."""
+    logger.debug(f"Serving SPA request for path: {full_path}")
+    
     # Skip API routes
     if full_path.startswith("api/"):
-        from fastapi import HTTPException
+        logger.debug(f"Skipping API route: {full_path}")
         raise HTTPException(status_code=404, detail="Not found")
     
-    # Serve static files
-    static_file = static_dir / full_path
-    if static_file.exists() and static_file.is_file():
-        return FileResponse(static_file)
+    # Try to serve static file
+    if STATIC_DIR.exists():
+        static_file = STATIC_DIR / full_path
+        logger.debug(f"Checking for static file at: {static_file}")
+        
+        if static_file.exists() and static_file.is_file():
+            logger.debug(f"Serving static file: {static_file}")
+            return FileResponse(static_file)
+        
+        # Fallback to index.html for SPA routing
+        index_file = STATIC_DIR / "index.html"
+        logger.debug(f"Serving index.html from: {index_file}")
+        if index_file.exists():
+            return FileResponse(index_file)
     
-    # Fallback to index.html for SPA routing
-    index_file = static_dir / "index.html"
-    if index_file.exists():
-        return FileResponse(index_file)
-    
-    from fastapi import HTTPException
+    logger.warning(f"Could not serve {full_path}, static dir exists: {STATIC_DIR.exists()}")
     raise HTTPException(status_code=404, detail="Not found")
 
 
